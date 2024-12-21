@@ -1,15 +1,15 @@
 
-# Satellite Downlink Beamforming Demo
+# 🛰️ Satellite Downlink Beamforming Demo
 
-We can form transmission beams by manipulating the phase of a precoding for every antenna-user-link.
+We can form transmission beams by manipulating the phase of every antenna-user-link.
 Number of antennas and users can be varied.
-Pre-calculated "AI solutions" exist for every scenario. Note: These are approximations, not the optimum solution.
+Pre-calculated "AI solutions" exist for every scenario. **Note**: These are approximations, not the optimum solution.
 
 The relevant file to start the GUI demo is `src/gui.py`.
 
 ![screenshot.png](reports/screenshot.png)
 
-### How does it work?
+## ⚙️ How does it work?
 
 - The upper window shows the power gain of the superimposed antenna emissions per user.
 - For the leftmost user only, the inset window shows the phase of each individual antenna emission.
@@ -19,6 +19,7 @@ The relevant file to start the GUI demo is `src/gui.py`.
 - The lower window shows the effect of the overlapping gains. High power gain and low inter-user interference lead to high sum rates.
 - The number in the lower window shows the sum rate, ignoring values lower 0.
 
+## 📂 Project Structure 
 ```
 root
 |   .gitignore            | .gitignore
@@ -30,6 +31,6 @@ root
 |   +---config            |   configuration files
 |   +---models            |   learning related
 |   +---satellite_figures |   tikz code to generate figures
-|   +---images            |   gui images
+└   +---images            |   gui images
 
 ```
