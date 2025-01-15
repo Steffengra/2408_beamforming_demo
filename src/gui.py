@@ -84,7 +84,7 @@ class BeamformingPlot:
             'color': 'white',
         }
 
-        self.aod_range = np.linspace(self.user_aods[0] - 0.05, self.user_aods[-1] + 0.05, 1000)
+        self.aod_range = np.linspace(self.user_aods[0] - 0.05, self.user_aods[-1] + 0.05, 500)
         self.user_aod_range_idx = []
         for user_id in range(self.user_num):
             self.user_aod_range_idx.append(np.argmin(np.abs(self.user_aods[user_id] - self.aod_range)))
@@ -411,8 +411,11 @@ class BeamformingPlot:
     ) -> np.ndarray:
 
         user_aod = self.user_aods[user_id]
+
+        steering_idx = np.arange(0, self.antenna_num) - (self.antenna_num - 1) / 2
+
         steering_vec = get_steering_vec(
-            antenna_num=self.antenna_num,
+            steering_idx=steering_idx,
             antenna_distance=self.config.sat_ant_dist,
             wavelength=self.config.wavelength,
             cos_aod=np.cos(user_aod),
@@ -431,15 +434,24 @@ class BeamformingPlot:
         norm_factor = np.sqrt(1 / np.trace(np.matmul(w_precoder.conj().T, w_precoder)))
         normalized_precoder = norm_factor * w_precoder
 
-        power_gains_users = np.zeros((self.user_num, len(self.aod_range)))
-        signal_to_interference_ratio_per_user = np.zeros((self.user_num, len(self.aod_range)))
-        for aod_id, aod in enumerate(self.aod_range):
-            steering_vec = get_steering_vec(antenna_num=self.antenna_num, antenna_distance=self.config.sat_ant_dist,
-                                            wavelength=self.config.wavelength, cos_aod=np.cos(aod))
-            for user_id in range(len(self.users_spherical_coordinates)):
-                power_gain_user = abs(np.matmul(steering_vec, normalized_precoder[:, user_id])) ** 2
-                power_gains_users[user_id, aod_id] = power_gain_user
+        steering_idx = np.arange(0, self.antenna_num) - (self.antenna_num - 1) / 2
 
+        # calculate power gains (upper plot)
+        power_gains_users = np.zeros((self.user_num, len(self.aod_range)))
+        for aod_id, aod in enumerate(self.aod_range):
+            steering_vec = get_steering_vec(
+                steering_idx=steering_idx,
+                antenna_distance=self.config.sat_ant_dist,
+                wavelength=self.config.wavelength,
+                cos_aod=np.cos(aod),
+            )
+            for user_id in range(self.user_num):
+                power_gains_users[user_id, aod_id] = abs(
+                    np.matmul(steering_vec, normalized_precoder[:, user_id])
+                ) ** 2
+
+        # calculate SINR (lower plot)
+        signal_to_interference_ratio_per_user = np.zeros((self.user_num, len(self.aod_range)))
         for user_id in range(self.user_num):
             signal_to_interference_ratio_per_user[user_id, :] = (
                 power_gains_users[user_id, :] / (

@@ -6,21 +6,17 @@ from src.utils.vector_functions import angle_between
 
 
 def get_steering_vec(
-        antenna_num: int,
+        steering_idx: np.ndarray,
         antenna_distance: float,
         wavelength: float,
         cos_aod: float,
 ) -> np.ndarray:
 
-    steering_vector_to_user = np.zeros(antenna_num, dtype='complex128')
+    constant_factor = -1j * 2 * np.pi / wavelength * antenna_distance * cos_aod
 
-    steering_idx = np.arange(0, antenna_num) - (antenna_num - 1) / 2
-
-    steering_vector_to_user[:] = np.exp(
+    steering_vector_to_user = np.exp(
         steering_idx
-        * -1j * 2 * np.pi / wavelength
-        * antenna_distance
-        * cos_aod
+        * constant_factor
     )
 
     return steering_vector_to_user
