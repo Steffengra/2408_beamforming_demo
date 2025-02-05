@@ -47,6 +47,9 @@ class BeamformingPlot:
 
         self.config = Config()
 
+        self.language = 'en'
+        self.tutorial = False
+
         self.own_spherical_coordinates = np.array([10, np.pi / 2, np.pi / 2])
         self.users_spherical_coordinates = [
             np.array([1, np.pi / 2, np.pi / 2 + 0.2]),
@@ -73,12 +76,13 @@ class BeamformingPlot:
 
         self.slider_args = {
             'valmin': 0,
-            'valmax': 2,
+            'valmax': 360,
             'valinit': 0,
-            'valfmt': '%.2f $\pi$',
+            'valfmt': '%.0f$°$',
             'initcolor': 'none',
             # 'edgecolor': 'black',
             'track_color': '#f2f2f2',
+            # 'valstep': 0.01,
         }
         self.button_args = {
             'color': 'white',
@@ -112,23 +116,43 @@ class BeamformingPlot:
         self.fig, self.axes = plt.subplots(nrows=2, ncols=1, sharex=True)
         self.fig.canvas.manager.full_screen_toggle()
 
+        # background image
+        img = plt.imread(Path(self.project_root_path, 'src', 'images', 'test.jpg'))
+        # self.axes[1].imshow(img)
+
         self.axes[0].set_ylim([0, 2.2])
         self.axes[1].set_ylim([0, 2.5])
+
+        self.axes[0].set_yticks([])
+        self.axes[1].set_yticks([])
+        self.axes[1].set_xticks([])
 
         for ax in self.axes:
             ax.set_xlim([self.aod_range[0], self.aod_range[-1]])
 
-        for ax in self.axes:
-            ax.grid(visible=True, axis='y')
+        # for ax in self.axes:
+        #     ax.grid(visible=True, axis='y')
 
-        self.axes[1].set_xticks([])
 
-        self.ax_overlapplot = self.axes[0].inset_axes((0.06, 0.6, 0.2, 0.3))
+        self.ax_overlapplot = self.axes[0].inset_axes((
+            0.06, 0.6,  # x0, y0
+            0.2, 0.3,  # width, height
+        ))
         self.lines_overlapplot = []
 
         self.ax_overlapplot.grid(visible=True, axis='y')
         self.ax_overlapplot.set_xticks([])
         self.ax_overlapplot.set_yticks([])
+
+        self.axes[0].indicate_inset(
+            bounds=(
+                self.user_aods[0] - 0.001, 2.15,  # x0, y0,
+                0.002, 0.1  # width, height
+            ),
+            inset_ax=self.ax_overlapplot,
+            edgecolor='black',
+            clip_on=False,
+        )
 
         self.result_text = self.axes[1].text(
             self.user_aods[-1]*1.015, 2.0, '',
@@ -137,12 +161,6 @@ class BeamformingPlot:
                 edgecolor='black',
                 boxstyle='round',
             )
-        )
-
-        self.axes[0].indicate_inset(
-            bounds=(self.user_aods[0] - 0.001, 0, 0.002, 0.1),
-            inset_ax=self.ax_overlapplot,
-            edgecolor='black',
         )
 
         # set title
@@ -189,14 +207,29 @@ class BeamformingPlot:
                 )), xo=self.button_pad_horizontal*self.window_width + sum(logo_widths[:-1]), yo=int(self.window_height - self.logo_img_height - self.button_pad_vertical*0.8*self.window_height)
             )
 
+        tutorial_image = Image.open(Path(self.images_path, '00_ANTposter_mini.png'))
+        self.tutorial_image = self.fig.figimage(
+            tutorial_image.resize((
+                get_width_rescale_constant_aspect_ratio(tutorial_image, int(0.9*self.window_height)),
+                int(0.9*self.window_height),
+            )),
+            xo=self.button_pad_horizontal*self.window_width + sum(logo_widths[:-1]),
+            yo=0.05*self.window_height,
+            visible=False,
+        )
+
         self.lines_power_gain = []
         self.lines_signal_to_interference = []
+        self.line_fills = []
 
         self.slider_axes = []
         self.sliders = []
 
         self.text_user_pos = []
         self.text_user_antennas = []
+
+        # button axes
+        self.ax_button_tutorial = self.fig.add_axes((0, 0, .5*self.button_width, .5*self.button_height))
 
         self.ax_button_2ant = self.fig.add_axes((1 - 3 * self.button_width - self.button_pad_horizontal,
                                                  1 - 2 * self.button_height - self.button_pad_vertical, self.button_width,
@@ -216,12 +249,16 @@ class BeamformingPlot:
         self.ax_button_user_toggle = self.fig.add_axes((1 - 3 * self.button_width - self.button_pad_horizontal,
                                                         1 - 1 * self.button_height - self.button_pad_vertical,
                                                         self.button_width, self.button_height))
+
+        # buttons
+        self.button_tutorial = Button(self.ax_button_tutorial, '?', **self.button_args)
         self.button_2_ant = Button(self.ax_button_2ant, '', **self.button_args)
         self.button_3_ant = Button(self.ax_button_3ant, '', **self.button_args)
         self.button_4_ant = Button(self.ax_button_4ant, '', **self.button_args)
         self.button_ai_solution = Button(self.ax_button_ai_solution, '', **self.button_args)
         self.button_language_toggle = Button(self.ax_button_language_toggle, '', **self.button_args, image=self.language_images['de'] if self.language=='en' else self.language_images['en'])
         self.button_user_toggle = Button(self.ax_button_user_toggle, '', **self.button_args)
+        self.button_tutorial.on_clicked(self.toggle_tutorial)
         self.button_2_ant.on_clicked(self.build_2_ant)
         self.button_3_ant.on_clicked(self.build_3_ant)
         self.button_4_ant.on_clicked(self.build_4_ant)
@@ -266,6 +303,11 @@ class BeamformingPlot:
                 del slider
         del self.sliders
         self.sliders = []
+
+        for line_fill in self.line_fills:
+            line_fill.remove()
+            del line_fill
+        self.line_fills = []
 
         for ax_id in range(2):
             while len(self.axes[ax_id].get_lines()) > 0:
@@ -326,10 +368,8 @@ class BeamformingPlot:
 
         # mark user positions
         for user_id, user_aod in enumerate(self.user_aods):
-            for ax in self.axes:
-                s = ax.scatter(user_aod, 0, color=self.colors[user_id], s=60)
-                s.set_clip_on(False)
-            # s = self.fig.text(0.5, 0.5, s=f'User {user_id}', color=self.colors[user_id])
+            self.axes[0].scatter(user_aod, 2.2, color=self.colors[user_id], s=60).set_clip_on(False)
+            self.axes[1].scatter(user_aod, 0, color=self.colors[user_id], s=60).set_clip_on(False)
             self.text_user_pos.append(
                 self.axes[0].text(user_aod, -0.15, s='', color=self.colors[user_id],
                                   verticalalignment='top', horizontalalignment='center'))
@@ -402,6 +442,8 @@ class BeamformingPlot:
 
         self.set_strings()
 
+        self.update_plots(None)
+
         self.fig.canvas.draw_idle()
 
     def calculate_gain_at_userpos(
@@ -466,11 +508,22 @@ class BeamformingPlot:
         w_precoder = np.exp(1j * np.zeros((self.antenna_num, self.user_num)))
         for sliders_user_id, sliders_user in enumerate(self.sliders):
             for slider_id, slider in enumerate(sliders_user):
-                w_precoder[slider_id, sliders_user_id] = np.exp(1j * slider.val * np.pi)
+                w_precoder[slider_id, sliders_user_id] = np.exp(1j * slider.val/360 * 2 * np.pi)
+
+        for line_fill in self.line_fills:
+            line_fill.remove()
+            del line_fill
+        self.line_fills = []
 
         power_gains_users, signal_to_interference_ratio_per_user = self.calculate_data(w_precoder)
         for line_id, line in enumerate(self.lines_power_gain):
             line.set_ydata(power_gains_users[line_id, :])
+            self.line_fills.append(
+                self.axes[0].fill_between(
+                    self.aod_range, power_gains_users[line_id, :],
+                    color=self.colors[line_id],
+                    alpha=0.3,
+            ))
         for line_id, line in enumerate(self.lines_signal_to_interference):
             line.set_ydata(signal_to_interference_ratio_per_user[line_id, :])
 
@@ -494,6 +547,7 @@ class BeamformingPlot:
     ) -> None:
         self.antenna_num = 2
         self.build_plot()
+        # self.axes[0].invert_yaxis()
 
     def build_3_ant(
             self,
@@ -501,6 +555,7 @@ class BeamformingPlot:
     ) -> None:
         self.antenna_num = 3
         self.build_plot()
+        # self.axes[0].invert_yaxis()
 
     def build_4_ant(
             self,
@@ -508,6 +563,7 @@ class BeamformingPlot:
     ) -> None:
         self.antenna_num = 4
         self.build_plot()
+        # self.axes[0].invert_yaxis()
 
     def solve(
             self,
@@ -542,11 +598,26 @@ class BeamformingPlot:
         else:
             vals = np.zeros(self.config.sat_nr * self.antenna_num * self.user_num)
 
+        vals = vals / 2 * 360
         vals = vals.reshape((self.config.sat_nr * self.antenna_num, self.user_num))
 
         for sliders_user_id, sliders_user in enumerate(self.sliders):
             for slider_id, slider in enumerate(sliders_user):
                 slider.set_val(vals[slider_id, sliders_user_id])
+
+    def toggle_tutorial(
+            self,
+            event,
+    ) -> None:
+
+        if self.tutorial is True:
+            self.tutorial_image.set(visible=False)
+            self.tutorial = False
+        else:
+            self.tutorial_image.set(visible=True, zorder=99)
+            self.tutorial = True
+
+        self.fig.canvas.draw_idle()
 
     def toggle_language(
             self,
