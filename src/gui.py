@@ -113,12 +113,12 @@ class BeamformingPlot:
         mpl.rc('lines', linewidth=2)
         mpl.rcParams['toolbar'] = 'None'
 
+        # load background image
+        self.background_img_frontal_2usr = plt.imread(Path(self.project_root_path, 'src', 'images', 'landscape_2usr.jpg'))
+        self.background_img_frontal_3usr = plt.imread(Path(self.project_root_path, 'src', 'images', 'landscape_3usr.jpg'))
+
         self.fig, self.axes = plt.subplots(nrows=2, ncols=1, sharex=True)
         self.fig.canvas.manager.full_screen_toggle()
-
-        # background image
-        img = plt.imread(Path(self.project_root_path, 'src', 'images', 'test.jpg'))
-        # self.axes[1].imshow(img)
 
         self.axes[0].set_ylim([0, 2.2])
         self.axes[1].set_ylim([0, 2.5])
@@ -280,7 +280,7 @@ class BeamformingPlot:
             ax_button.set_ylim((1200, -300))
             ax_button.set_box_aspect((self.button_height * self.window_height) / (self.button_width * self.window_width))
 
-        self.fig.subplots_adjust(top=0.74, right=0.65, left=0.1, bottom=0.08)
+        self.fig.subplots_adjust(top=0.74, right=0.65, left=0.05, bottom=0.08)
 
         self.build_plot()
 
@@ -337,6 +337,9 @@ class BeamformingPlot:
         del self.text_user_antennas
         self.text_user_antennas = []
 
+        if hasattr(self, 'background_axis_1'):
+            self.background_axis_1.remove()
+
     def build_plot(
             self,
     ) -> None:
@@ -348,6 +351,14 @@ class BeamformingPlot:
 
         # set scenario figure
         self.scenario_figure = self.scenario_figure_axis.images[0].set_data(self.scenario_images[f'{self.user_num}-{self.antenna_num}'])
+
+        # set backgrounds
+        # self.background_axis_0 = self.axes[0].imshow(background_img_1, extent=[self.aod_range[0], self.aod_range[-1], 0, 2.2], aspect='auto', zorder=-1)
+        if self.user_num == 2:
+            img = self.background_img_frontal_2usr
+        elif self.user_num == 3:
+            img = self.background_img_frontal_3usr
+        self.background_axis_1 = self.axes[1].imshow(img, extent=[self.aod_range[0], self.aod_range[-1], 0, 2.5], aspect='auto', zorder=-1)
 
         # set main axes lines
         w_precoder = np.exp(1j * np.zeros((self.antenna_num, self.user_num)))
