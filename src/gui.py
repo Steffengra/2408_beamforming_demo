@@ -8,6 +8,8 @@ from pathlib import Path
 from PIL import Image
 import tkinter
 import json
+import threading
+import time
 
 import matplotlib as mpl
 import matplotlib.pyplot as plt
@@ -46,10 +48,12 @@ class BeamformingPlot:
         self._load_strings(self.language)
 
         self.config = Config()
+        self.rng = np.random.default_rng()
 
         # globals
         self.language = 'en'
         self.tutorial = False
+        self.auto_mode = False
 
         self.own_spherical_coordinates = np.array([10, np.pi / 2, np.pi / 2])
         self.users_spherical_coordinates = [
@@ -62,7 +66,7 @@ class BeamformingPlot:
         self.user_num = len(self.users_spherical_coordinates)
 
         self.logo_img_height = int(0.09 * self.window_height)  # in pixels
-        self.button_width = 0.1  # relative
+        self.button_width = 0.07  # relative
         self.button_height = 0.1  # relative
         self.button_pad_horizontal = 30 / self.window_width  # relative
         self.button_pad_vertical = 30 / self.window_height  # relative
@@ -119,24 +123,27 @@ class BeamformingPlot:
         self.background_img_frontal_2usr = plt.imread(Path(self.project_root_path, 'src', 'images', 'landscape_2usr.jpg'))
         self.background_img_frontal_3usr = plt.imread(Path(self.project_root_path, 'src', 'images', 'landscape_3usr.jpg'))
 
-        self.fig, self.axes = plt.subplots(nrows=2, ncols=1, sharex=True)
+        self.fig, self._axes = plt.subplots(nrows=2, ncols=1, sharex=True)
+        self.axis_beam = self._axes[1]
+        self.axis_sinr = self._axes[0]
+
         self.fig.canvas.manager.full_screen_toggle()
 
-        self.axes[0].set_ylim([0, 2.2])
-        self.axes[1].set_ylim([0, 2.5])
+        self.axis_beam.set_ylim([0, 2.2])
+        self.axis_sinr.set_ylim([0, 2.5])
 
-        self.axes[0].set_yticks([])
-        self.axes[1].set_yticks([])
-        self.axes[1].set_xticks([])
+        self.axis_beam.set_yticks([])
+        self.axis_sinr.set_yticks([])
+        self.axis_sinr.set_xticks([])
 
-        for ax in self.axes:
+        for ax in self._axes:
             ax.set_xlim([self.aod_range[0], self.aod_range[-1]])
 
         # for ax in self.axes:
         #     ax.grid(visible=True, axis='y')
 
 
-        self.ax_overlapplot = self.axes[0].inset_axes((
+        self.ax_overlapplot = self.axis_beam.inset_axes((
             0.06, 0.6,  # x0, y0
             0.2, 0.3,  # width, height
         ))
@@ -146,7 +153,7 @@ class BeamformingPlot:
         self.ax_overlapplot.set_xticks([])
         self.ax_overlapplot.set_yticks([])
 
-        self.axes[0].indicate_inset(
+        self.axis_beam.indicate_inset(
             bounds=(
                 self.user_aods[0] - 0.001, 2.15,  # x0, y0,
                 0.002, 0.1  # width, height
@@ -156,7 +163,7 @@ class BeamformingPlot:
             clip_on=False,
         )
 
-        self.result_text = self.axes[1].text(
+        self.result_text = self.axis_sinr.text(
             self.user_aods[-1]*1.015, 2.0, '',
             bbox=dict(
                 facecolor='white',
@@ -181,7 +188,7 @@ class BeamformingPlot:
 
         self.scenario_figure_axis = self.fig.add_axes(
             (
-                1 - self.scenario_image_width - 3 * self.button_width - self.button_pad_horizontal,
+                1 - self.scenario_image_width - 4 * self.button_width - self.button_pad_horizontal,
                 1 - self.scenario_image_height - self.button_pad_vertical,
                 self.scenario_image_width,
                 self.scenario_image_height,
@@ -233,24 +240,46 @@ class BeamformingPlot:
         # button axes
         self.ax_button_tutorial = self.fig.add_axes((0, 0, .5*self.button_width, .5*self.button_height))
 
-        self.ax_button_2ant = self.fig.add_axes((1 - 3 * self.button_width - self.button_pad_horizontal,
-                                                 1 - 2 * self.button_height - self.button_pad_vertical, self.button_width,
-                                                 self.button_height))
-        self.ax_button_3ant = self.fig.add_axes((1 - 2 * self.button_width - self.button_pad_horizontal,
-                                                 1 - 2 * self.button_height - self.button_pad_vertical, self.button_width,
-                                                 self.button_height))
-        self.ax_button_4ant = self.fig.add_axes((1 - 1 * self.button_width - self.button_pad_horizontal,
-                                                 1 - 2 * self.button_height - self.button_pad_vertical, self.button_width,
-                                                 self.button_height))
-        self.ax_button_ai_solution = self.fig.add_axes((1 - 2 * self.button_width - self.button_pad_horizontal,
-                                                        1 - 1 * self.button_height - self.button_pad_vertical,
-                                                        self.button_width, self.button_height))
-        self.ax_button_language_toggle = self.fig.add_axes((1 - 1 * self.button_width - self.button_pad_horizontal,
-                                                            1 - 1 * self.button_height - self.button_pad_vertical,
-                                                            self.button_width, self.button_height))
-        self.ax_button_user_toggle = self.fig.add_axes((1 - 3 * self.button_width - self.button_pad_horizontal,
-                                                        1 - 1 * self.button_height - self.button_pad_vertical,
-                                                        self.button_width, self.button_height))
+        self.ax_button_2ant = self.fig.add_axes(
+            (1 - 3 * self.button_width - self.button_pad_horizontal,
+             1 - 2 * self.button_height - self.button_pad_vertical,
+             self.button_width, self.button_height)
+        )
+        self.ax_button_3ant = self.fig.add_axes(
+            (1 - 2 * self.button_width - self.button_pad_horizontal,
+             1 - 2 * self.button_height - self.button_pad_vertical,
+             self.button_width, self.button_height)
+        )
+        self.ax_button_4ant = self.fig.add_axes(
+            (1 - 1 * self.button_width - self.button_pad_horizontal,
+             1 - 2 * self.button_height - self.button_pad_vertical,
+             self.button_width, self.button_height)
+        )
+        self.ax_button_user_toggle = self.fig.add_axes(
+            (1 - 4 * self.button_width - self.button_pad_horizontal,
+             1 - 2 * self.button_height - self.button_pad_vertical,
+             self.button_width, self.button_height)
+        )
+        self.ax_button_ai_solution = self.fig.add_axes(
+            (1 - 4 * self.button_width - self.button_pad_horizontal,
+             1 - 1 * self.button_height - self.button_pad_vertical,
+             self.button_width, self.button_height)
+        )
+        self.ax_button_language_toggle = self.fig.add_axes(
+            (1 - 3 * self.button_width - self.button_pad_horizontal,
+             1 - 1 * self.button_height - self.button_pad_vertical,
+             self.button_width, self.button_height)
+        )
+        self.ax_button_display_mode = self.fig.add_axes(
+            (1 - 2 * self.button_width - self.button_pad_horizontal,
+             1 - 1 * self.button_height - self.button_pad_vertical,
+             self.button_width, self.button_height)
+        )
+        self.ax_button_auto_mode = self.fig.add_axes(
+            (1 - 1 * self.button_width - self.button_pad_horizontal,
+             1 - 1 * self.button_height - self.button_pad_vertical,
+             self.button_width, self.button_height)
+        )
 
         # buttons
         self.button_tutorial = Button(self.ax_button_tutorial, '?', **self.button_args)
@@ -260,6 +289,9 @@ class BeamformingPlot:
         self.button_ai_solution = Button(self.ax_button_ai_solution, '', **self.button_args)
         self.button_language_toggle = Button(self.ax_button_language_toggle, '', **self.button_args, image=self.language_images['de'] if self.language=='en' else self.language_images['en'])
         self.button_user_toggle = Button(self.ax_button_user_toggle, '', **self.button_args)
+        self.button_display_mode = Button(self.ax_button_display_mode, '', **self.button_args)
+        self.button_auto_mode = Button(self.ax_button_auto_mode, '', **self.button_args)
+
         self.button_tutorial.on_clicked(self.toggle_tutorial)
         self.button_2_ant.on_clicked(self.build_2_ant)
         self.button_3_ant.on_clicked(self.build_3_ant)
@@ -267,6 +299,8 @@ class BeamformingPlot:
         self.button_ai_solution.on_clicked(self.solve)
         self.button_language_toggle.on_clicked(self.toggle_language)
         self.button_user_toggle.on_clicked(self.toggle_user_number)
+        self.button_display_mode.on_clicked(self.toggle_display_mode)
+        self.button_auto_mode.on_clicked(self.toggle_auto_mode)
 
         # imshow changes the axis box and there's no easy way to stop it so we just resize it back to before
         self.ax_button_language_toggle.set_box_aspect((self.button_height * self.window_height) / (self.button_width * self.window_width))
@@ -312,13 +346,13 @@ class BeamformingPlot:
         self.line_fills = []
 
         for ax_id in range(2):
-            while len(self.axes[ax_id].get_lines()) > 0:
-                line = self.axes[ax_id].get_lines().pop(0).remove()
+            while len(self._axes[ax_id].get_lines()) > 0:
+                line = self._axes[ax_id].get_lines().pop(0).remove()
                 del line
 
         for ax_id in range(2):
-            while len(self.axes[ax_id].collections) > 0:
-                for collection in self.axes[ax_id].collections:
+            while len(self._axes[ax_id].collections) > 0:
+                for collection in self._axes[ax_id].collections:
                     collection.remove()
                     del collection
 
@@ -355,12 +389,12 @@ class BeamformingPlot:
         self.scenario_figure = self.scenario_figure_axis.images[0].set_data(self.scenario_images[f'{self.user_num}-{self.antenna_num}'])
 
         # set backgrounds
-        # self.background_axis_0 = self.axes[0].imshow(background_img_1, extent=[self.aod_range[0], self.aod_range[-1], 0, 2.2], aspect='auto', zorder=-1)
+        # self.background_axis_0 = self.axis_beam.imshow(background_img_1, extent=[self.aod_range[0], self.aod_range[-1], 0, 2.2], aspect='auto', zorder=-1)
         if self.user_num == 2:
             img = self.background_img_frontal_2usr
         elif self.user_num == 3:
             img = self.background_img_frontal_3usr
-        self.background_axis_1 = self.axes[1].imshow(img, extent=[self.aod_range[0], self.aod_range[-1], 0, 2.5], aspect='auto', zorder=-1)
+        self.background_axis_1 = self.axis_sinr.imshow(img, extent=[self.aod_range[0], self.aod_range[-1], 0, 2.5], aspect='auto', zorder=-1)
 
         # set main axes lines
         w_precoder = np.exp(1j * np.zeros((self.antenna_num, self.user_num)))
@@ -370,9 +404,9 @@ class BeamformingPlot:
         self.lines_signal_to_interference = []
         for user_id in range(self.user_num):
             self.lines_power_gain.append(
-                self.axes[0].plot(self.aod_range, power_gains_users[user_id, :], color=self.colors[user_id])[0])
+                self.axis_beam.plot(self.aod_range, power_gains_users[user_id, :], color=self.colors[user_id])[0])
             self.lines_signal_to_interference.append(
-                self.axes[1].plot(self.aod_range, signal_to_interference_ratio_per_user[user_id, :],
+                self.axis_sinr.plot(self.aod_range, signal_to_interference_ratio_per_user[user_id, :],
                                   color=self.colors[user_id])[0])
 
         # set result text
@@ -381,14 +415,14 @@ class BeamformingPlot:
 
         # mark user positions
         for user_id, user_aod in enumerate(self.user_aods):
-            self.axes[0].scatter(user_aod, 2.2, color=self.colors[user_id], s=60).set_clip_on(False)
-            self.axes[1].scatter(user_aod, 0, color=self.colors[user_id], s=60).set_clip_on(False)
+            self.axis_beam.scatter(user_aod, 2.2, color=self.colors[user_id], s=60).set_clip_on(False)
+            self.axis_sinr.scatter(user_aod, 0, color=self.colors[user_id], s=60).set_clip_on(False)
             self.text_user_pos.append(
-                self.axes[0].text(user_aod, -0.15, s='', color=self.colors[user_id],
+                self.axis_beam.text(user_aod, -0.15, s='', color=self.colors[user_id],
                                   verticalalignment='top', horizontalalignment='center'))
 
-            self.axes[0].vlines(user_aod, 0, 20, ls=':', color=self.colors[user_id])
-            self.axes[1].vlines(user_aod, 0, 15, ls=':', color=self.colors[user_id])
+            self.axis_beam.vlines(user_aod, 0, 20, ls=':', color=self.colors[user_id])
+            self.axis_sinr.vlines(user_aod, 0, 15, ls=':', color=self.colors[user_id])
 
         # create lines for wave overlap inset plot
         angles = self.calculate_gain_at_userpos(user_id=0, w_precoder=np.ones(self.antenna_num)[np.newaxis])
@@ -401,7 +435,7 @@ class BeamformingPlot:
         for user_id in range(self.user_num):
             self.text_user_antennas.append(
                 self.fig.text(
-                    x=1 - 3 * self.button_width - self.button_pad_horizontal,
+                    x=1 - 4 * self.button_width - self.button_pad_horizontal,
                     y=(
                             1 - self.button_pad_vertical - 2 * self.button_height - self.button_pad_vertical
                             - (user_id+1) * self.relative_main_font_size
@@ -418,7 +452,7 @@ class BeamformingPlot:
         self.slider_axes = [
             [
                 self.fig.add_axes((
-                    1 - 3 * self.button_width - self.button_pad_horizontal + 0.1,
+                    1 - 4 * self.button_width - self.button_pad_horizontal + 0.1,
                     (
                             1 - self.button_pad_vertical - 2 * self.button_height - self.button_pad_vertical
                             - (user_id+1) * self.relative_main_font_size
@@ -564,7 +598,6 @@ class BeamformingPlot:
     ) -> None:
         self.antenna_num = 2
         self.build_plot()
-        # self.axes[0].invert_yaxis()
 
     def build_3_ant(
             self,
@@ -572,7 +605,6 @@ class BeamformingPlot:
     ) -> None:
         self.antenna_num = 3
         self.build_plot()
-        # self.axes[0].invert_yaxis()
 
     def build_4_ant(
             self,
@@ -580,7 +612,6 @@ class BeamformingPlot:
     ) -> None:
         self.antenna_num = 4
         self.build_plot()
-        # self.axes[0].invert_yaxis()
 
     def solve(
             self,
@@ -653,7 +684,6 @@ class BeamformingPlot:
 
         self.ax_button_language_toggle.images[0].set_data(image_language_other)
 
-
         self.fig.canvas.draw_idle()
 
     def toggle_user_number(
@@ -692,6 +722,69 @@ class BeamformingPlot:
             self.user_aod_range_idx.append(np.argmin(np.abs(self.user_aods[user_id] - self.aod_range)))
 
         self.build_plot()
+
+    def toggle_display_mode(
+            self,
+            event,
+    ) -> None:
+
+        if self.axis_sinr.get_visible() is False:
+            self.axis_sinr.set_visible(True)
+        else:
+            self.axis_sinr.set_visible(False)
+        self.fig.canvas.draw_idle()
+
+    def toggle_auto_mode(
+            self,
+            event,
+    ) -> None:
+
+        self.auto_mode = not self.auto_mode
+
+        if self.auto_mode:
+            t = threading.Timer(0.5, self.run_auto_mode)
+            t.start()
+
+    def run_auto_mode(
+            self,
+    ) -> None:
+
+        if self.auto_mode:
+
+            # select a slider
+            slider_id_1 = self.rng.integers(0, len(self.sliders))
+            slider_id_2 = self.rng.integers(0, len(self.sliders[slider_id_1]))
+            slider = self.sliders[slider_id_1][slider_id_2]
+
+            # select new value
+            new_value = self.rng.uniform(0, 360)
+
+            # queue next
+            t = threading.Timer(interval=3.5, function=self.run_auto_mode)
+            t.start()
+
+            # move
+            # slider.set_val(new_value)
+            self.move_slider_smoothly(slider, new_value, time_to_move_seconds=3)
+
+
+    @staticmethod
+    def move_slider_smoothly(
+            slider,
+            new_value: float,
+            time_to_move_seconds: float,
+    ) -> None:
+
+        number_of_steps = 20
+
+        current_value = slider.val
+        values = np.linspace(current_value, new_value, num=number_of_steps)
+
+        time_step = time_to_move_seconds / number_of_steps
+
+        for value in values:
+            slider.set_val(value)
+            time.sleep(time_step)
 
     def _load_locales(
             self,
@@ -782,9 +875,9 @@ class BeamformingPlot:
         self.title_text.set_text(self.strings["plot_title"])
         self.subtitle_text.set_text(f'{self.antenna_num} {self.strings["antennapl"]}, {self.user_num} {self.strings["userpl"]}')
 
-        self.axes[1].set_xlabel(self.strings['direction'])
-        self.axes[0].set_ylabel(self.strings['power_gain'])
-        self.axes[1].set_ylabel(self.strings['signal_strength'])
+        self.axis_sinr.set_xlabel(self.strings['direction'])
+        self.axis_beam.set_ylabel(self.strings['power_gain'])
+        self.axis_sinr.set_ylabel(self.strings['signal_strength'])
 
         # self.button_2_ant.label.set_text(f'2 {self.strings["antennapl"]}')
         # self.button_3_ant.label.set_text(f'3 {self.strings["antennapl"]}')
