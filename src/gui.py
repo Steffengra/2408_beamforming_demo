@@ -520,16 +520,17 @@ class BeamformingPlot:
             w_precoder: np.ndarray,
     ) -> tuple[np.ndarray, np.ndarray]:
 
-        norm_factor = np.sqrt(1 / np.trace(np.matmul(w_precoder.conj().T, w_precoder)))
-        normalized_precoder = norm_factor * w_precoder
+        norm_factor = np.linalg.norm(w_precoder)
+        normalized_precoder = w_precoder / norm_factor
 
         steering_idx = np.arange(0, self.antenna_num) - (self.antenna_num - 1) / 2
 
         # calculate power gains (upper plot)
-        constant_factor = -1j * 2 * np.pi / self.config.wavelength * self.config.sat_ant_dist
-        constant_factor = constant_factor * self.cos_aod_range
         steering_vecs = np.exp(
-            np.outer(constant_factor, steering_idx)
+            np.outer(
+                -1j * 2 * np.pi / self.config.wavelength * self.config.sat_ant_dist * self.cos_aod_range,
+                steering_idx
+            )
         )
         power_gains_users = abs(
             np.matmul(steering_vecs, normalized_precoder)
@@ -537,13 +538,12 @@ class BeamformingPlot:
         power_gains_users = power_gains_users.T
 
         # calculate SINR (lower plot)
+        user_index_range = np.arange(power_gains_users.shape[0])
         signal_to_interference_ratio_per_user = np.zeros((self.user_num, len(self.aod_range)))
-
-        index_range = np.arange(power_gains_users.shape[0])
         for user_id in range(self.user_num):
             signal_to_interference_ratio_per_user[user_id, :] = (
                 power_gains_users[user_id, :] / (
-                    np.sum(power_gains_users[index_range != user_id], axis=0)
+                    np.sum(power_gains_users[user_index_range != user_id], axis=0)
                     + 0.01  # regularizing noise
                 )
             )
