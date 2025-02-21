@@ -47,6 +47,7 @@ class BeamformingPlot:
 
         self.config = Config()
 
+        # globals
         self.language = 'en'
         self.tutorial = False
 
@@ -89,6 +90,7 @@ class BeamformingPlot:
         }
 
         self.aod_range = np.linspace(self.user_aods[0] - 0.05, self.user_aods[-1] + 0.05, 500)
+        self.cos_aod_range = np.cos(self.aod_range)
         self.user_aod_range_idx = []
         for user_id in range(self.user_num):
             self.user_aod_range_idx.append(np.argmin(np.abs(self.user_aods[user_id] - self.aod_range)))
@@ -490,25 +492,24 @@ class BeamformingPlot:
         steering_idx = np.arange(0, self.antenna_num) - (self.antenna_num - 1) / 2
 
         # calculate power gains (upper plot)
-        power_gains_users = np.zeros((self.user_num, len(self.aod_range)))
-        for aod_id, aod in enumerate(self.aod_range):
-            steering_vec = get_steering_vec(
-                steering_idx=steering_idx,
-                antenna_distance=self.config.sat_ant_dist,
-                wavelength=self.config.wavelength,
-                cos_aod=np.cos(aod),
-            )
-            for user_id in range(self.user_num):
-                power_gains_users[user_id, aod_id] = abs(
-                    np.matmul(steering_vec, normalized_precoder[:, user_id])
-                ) ** 2
+        constant_factor = -1j * 2 * np.pi / self.config.wavelength * self.config.sat_ant_dist
+        constant_factor = constant_factor * self.cos_aod_range
+        steering_vecs = np.exp(
+            np.outer(constant_factor, steering_idx)
+        )
+        power_gains_users = abs(
+            np.matmul(steering_vecs, normalized_precoder)
+        ) ** 2
+        power_gains_users = power_gains_users.T
 
         # calculate SINR (lower plot)
         signal_to_interference_ratio_per_user = np.zeros((self.user_num, len(self.aod_range)))
+
+        index_range = np.arange(power_gains_users.shape[0])
         for user_id in range(self.user_num):
             signal_to_interference_ratio_per_user[user_id, :] = (
                 power_gains_users[user_id, :] / (
-                    np.sum(np.delete(power_gains_users, user_id, axis=0), axis=0)
+                    np.sum(power_gains_users[index_range != user_id], axis=0)
                     + 0.01  # regularizing noise
                 )
             )
@@ -516,25 +517,30 @@ class BeamformingPlot:
         return power_gains_users, np.log10(signal_to_interference_ratio_per_user)
 
     def update_plots(self, val):
-        w_precoder = np.exp(1j * np.zeros((self.antenna_num, self.user_num)))
-        for sliders_user_id, sliders_user in enumerate(self.sliders):
-            for slider_id, slider in enumerate(sliders_user):
-                w_precoder[slider_id, sliders_user_id] = np.exp(1j * slider.val/360 * 2 * np.pi)
+
+        const = 1j * 2 * np.pi
+        slider_vals = [
+            slider.val / 360 * const
+            for sliders_user in self.sliders
+            for slider in sliders_user
+        ]
+        w_precoder = np.exp(slider_vals).reshape((self.antenna_num, self.user_num), order='F')
 
         for line_fill in self.line_fills:
             line_fill.remove()
             del line_fill
-        self.line_fills = []
 
         power_gains_users, signal_to_interference_ratio_per_user = self.calculate_data(w_precoder)
+        self.line_fills = [
+            self.axis_beam.fill_between(
+                self.aod_range, power_gains_users[line_id, :],
+                color=self.colors[line_id],
+                alpha=0.3,
+            )
+            for line_id in range(len(self.lines_power_gain))
+        ]
         for line_id, line in enumerate(self.lines_power_gain):
             line.set_ydata(power_gains_users[line_id, :])
-            self.line_fills.append(
-                self.axes[0].fill_between(
-                    self.aod_range, power_gains_users[line_id, :],
-                    color=self.colors[line_id],
-                    alpha=0.3,
-            ))
         for line_id, line in enumerate(self.lines_signal_to_interference):
             line.set_ydata(signal_to_interference_ratio_per_user[line_id, :])
 

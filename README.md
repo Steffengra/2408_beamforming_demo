@@ -15,7 +15,7 @@ The relevant file to start the GUI demo is `src/gui.py`.
 - For the leftmost user only, the inset window shows the phase of each individual antenna emission.
 - The phases can be controlled by the sliders on the right hand side.
 - At any position, constructive interference of the antennas will lead to high directional gain, while destructive interference leads to low gain.
-- To maximize the sum rate, we want to maximize each user's power gain at their position, while minimizing each user's power gain at all other user's positions.
+- To maximize the data rate, we want to maximize each user's power gain at their position, while minimizing each user's power gain at all other user's positions.
 - The lower window shows the effect of the overlapping gains. High power gain and low inter-user interference lead to high sum rates.
 - The number in the lower window shows the sum rate, ignoring values lower 0.
 
