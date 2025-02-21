@@ -229,7 +229,7 @@ class BeamformingPlot:
 
         self.lines_power_gain = []
         self.lines_signal_to_interference = []
-        self.line_fills = []
+        self.line_fills = {}
 
         self.slider_axes = []
         self.sliders = []
@@ -345,10 +345,10 @@ class BeamformingPlot:
         del self.sliders
         self.sliders = []
 
-        for line_fill in self.line_fills:
+        for line_fill in self.line_fills.values():
             line_fill.remove()
             del line_fill
-        self.line_fills = []
+        self.line_fills = {}
 
         for ax_id in range(2):
             while len(self._axes[ax_id].get_lines()) > 0:
@@ -488,13 +488,14 @@ class BeamformingPlot:
             for user_id in range(self.user_num)
         ]
 
-        for sliders_user in self.sliders:
+        update_plot_functions = [self.update_plots_user0, self.update_plots_user1, self.update_plots_user2]
+        for user_id, sliders_user in enumerate(self.sliders):
             for slider in sliders_user:
-                slider.on_changed(self.update_plots)
+                slider.on_changed(update_plot_functions[user_id])
 
         self.set_strings()
 
-        self.update_plots(None)
+        self.update_plots(None, user='all')
 
         self.fig.canvas.draw_idle()
 
@@ -555,7 +556,28 @@ class BeamformingPlot:
 
         return power_gains_users, np.log10(signal_to_interference_ratio_per_user)
 
-    def update_plots(self, val):
+    def update_plots_user0(
+            self,
+            val,
+    ) -> None:
+
+        self.update_plots(None, user=0)
+
+    def update_plots_user1(
+            self,
+            val,
+    ) -> None:
+
+        self.update_plots(None, user=1)
+
+    def update_plots_user2(
+            self,
+            val,
+    ) -> None:
+
+        self.update_plots(None, user=2)
+
+    def update_plots(self, vals, user):
 
         const = 1j * 2 * np.pi
         slider_vals = [
@@ -565,21 +587,38 @@ class BeamformingPlot:
         ]
         w_precoder = np.exp(slider_vals).reshape((self.antenna_num, self.user_num), order='F')
 
-        for line_fill in self.line_fills:
-            line_fill.remove()
-            del line_fill
 
         power_gains_users, signal_to_interference_ratio_per_user = self.calculate_data(w_precoder)
-        self.line_fills = [
-            self.axis_beam.fill_between(
-                self.aod_range, power_gains_users[line_id, :],
-                color=self.colors[line_id],
+
+        if user == 'all':
+
+            for line_fill in self.line_fills.values():
+                line_fill.remove()
+                del line_fill
+
+            self.line_fills = {
+                line_id:
+                self.axis_beam.fill_between(
+                    self.aod_range, power_gains_users[line_id, :],
+                    color=self.colors[line_id],
+                    alpha=0.3,
+                )
+                for line_id in range(len(self.lines_power_gain))
+            }
+
+            for line_id, line in enumerate(self.lines_power_gain):
+                line.set_ydata(power_gains_users[line_id, :])
+        else:
+
+            self.line_fills[user].remove()
+            self.line_fills[user] = self.axis_beam.fill_between(
+                self.aod_range, power_gains_users[user, :],
+                color=self.colors[user],
                 alpha=0.3,
             )
-            for line_id in range(len(self.lines_power_gain))
-        ]
-        for line_id, line in enumerate(self.lines_power_gain):
-            line.set_ydata(power_gains_users[line_id, :])
+
+            self.lines_power_gain[user].set_ydata(power_gains_users[user, :])
+
         for line_id, line in enumerate(self.lines_signal_to_interference):
             line.set_ydata(signal_to_interference_ratio_per_user[line_id, :])
 
@@ -591,9 +630,10 @@ class BeamformingPlot:
         )
         self.result_text.set_text(f'{sum_sinr:.2f}')
 
-        angles = self.calculate_gain_at_userpos(user_id=0, w_precoder=w_precoder)
-        for angle, line in zip(angles, self.lines_overlapplot):
-            line.set_ydata(np.sin(np.linspace(0, 2 * np.pi, 100) - angle))
+        if user == 0:
+            angles = self.calculate_gain_at_userpos(user_id=0, w_precoder=w_precoder)
+            for angle, line in zip(angles, self.lines_overlapplot):
+                line.set_ydata(np.sin(np.linspace(0, 2 * np.pi, 100) - angle))
 
         self.fig.canvas.draw_idle()
 
@@ -747,7 +787,7 @@ class BeamformingPlot:
         self.auto_mode = not self.auto_mode
 
         if self.auto_mode:
-            t = threading.Timer(0.5, self.run_auto_mode)
+            t = threading.Timer(0.1, self.run_auto_mode)
             t.start()
 
     def run_auto_mode(
@@ -782,16 +822,19 @@ class BeamformingPlot:
             time_to_move_seconds: float,
     ) -> None:
 
-        number_of_steps = 20
+        number_of_steps = 15
 
         current_value = slider.val
-        values = np.linspace(current_value, new_value, num=number_of_steps)
+        values = np.linspace(current_value, new_value, num=number_of_steps+1)[1:]
 
-        time_step = time_to_move_seconds / number_of_steps
+        time_step = time_to_move_seconds / (number_of_steps-1)
 
-        for value in values:
+        slider.drag_active = True  # not sure this does anything
+        for value_id, value in enumerate(values):
             slider.set_val(value)
             time.sleep(time_step)
+        slider.drag_active = False  # not sure this does anything
+
 
     def _load_locales(
             self,
