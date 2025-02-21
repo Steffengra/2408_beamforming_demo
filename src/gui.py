@@ -260,13 +260,14 @@ class BeamformingPlot:
              1 - 2 * self.button_height - self.button_pad_vertical,
              self.button_width, self.button_height)
         )
+
         self.ax_button_ai_solution = self.fig.add_axes(
             (1 - 4 * self.button_width - self.button_pad_horizontal,
              1 - 1 * self.button_height - self.button_pad_vertical,
              self.button_width, self.button_height)
         )
         self.ax_button_language_toggle = self.fig.add_axes(
-            (1 - 3 * self.button_width - self.button_pad_horizontal,
+            (1 - 1 * self.button_width - self.button_pad_horizontal,
              1 - 1 * self.button_height - self.button_pad_vertical,
              self.button_width, self.button_height)
         )
@@ -276,20 +277,20 @@ class BeamformingPlot:
              self.button_width, self.button_height)
         )
         self.ax_button_auto_mode = self.fig.add_axes(
-            (1 - 1 * self.button_width - self.button_pad_horizontal,
+            (1 - 3 * self.button_width - self.button_pad_horizontal,
              1 - 1 * self.button_height - self.button_pad_vertical,
              self.button_width, self.button_height)
         )
 
         # buttons
-        self.button_tutorial = Button(self.ax_button_tutorial, '?', **self.button_args)
+        self.button_tutorial = Button(self.ax_button_tutorial, 'i', **self.button_args)
         self.button_2_ant = Button(self.ax_button_2ant, '', **self.button_args)
         self.button_3_ant = Button(self.ax_button_3ant, '', **self.button_args)
         self.button_4_ant = Button(self.ax_button_4ant, '', **self.button_args)
         self.button_ai_solution = Button(self.ax_button_ai_solution, '', **self.button_args)
         self.button_language_toggle = Button(self.ax_button_language_toggle, '', **self.button_args, image=self.language_images['de'] if self.language=='en' else self.language_images['en'])
         self.button_user_toggle = Button(self.ax_button_user_toggle, '', **self.button_args)
-        self.button_display_mode = Button(self.ax_button_display_mode, '', **self.button_args)
+        self.button_display_mode = Button(self.ax_button_display_mode, '?', **self.button_args)
         self.button_auto_mode = Button(self.ax_button_auto_mode, '', **self.button_args)
 
         self.button_tutorial.on_clicked(self.toggle_tutorial)
@@ -309,12 +310,16 @@ class BeamformingPlot:
         self.ax_button_ai_solution.set_ylim((400, -100))
         self.ax_button_ai_solution.set_box_aspect((self.button_height * self.window_height) / (self.button_width * self.window_width))
         self.ax_button_user_toggle.imshow(self.toggle_user_images['less'] if self.user_num == 3 else self.toggle_user_images['more'], interpolation=None)
-        self.ax_button_user_toggle.set_ylim((600, -200))
+        self.ax_button_user_toggle.set_ylim((170, -40))
         self.ax_button_user_toggle.set_box_aspect((self.button_height * self.window_height) / (self.button_width * self.window_width))
         for antenna_nr, ax_button in zip(range(2, 5), [self.ax_button_2ant, self.ax_button_3ant, self.ax_button_4ant]):
             ax_button.imshow(self.antenna_images[f'{antenna_nr}'])
             ax_button.set_ylim((1200, -300))
             ax_button.set_box_aspect((self.button_height * self.window_height) / (self.button_width * self.window_width))
+        self.ax_button_auto_mode.imshow(self.auto_mode_image, interpolation=None)
+        self.ax_button_auto_mode.set_ylim((550, -200))
+        self.ax_button_auto_mode.set_box_aspect((self.button_height * self.window_height) / (self.button_width * self.window_width))
+        self.button_display_mode.label.set_fontsize(30)
 
         self.fig.subplots_adjust(top=0.74, right=0.65, left=0.05, bottom=0.08)
 
@@ -759,13 +764,15 @@ class BeamformingPlot:
             # select new value
             new_value = self.rng.uniform(0, 360)
 
+            time_to_move = 0.8
+
             # queue next
-            t = threading.Timer(interval=3.5, function=self.run_auto_mode)
+            t = threading.Timer(interval=time_to_move+1, function=self.run_auto_mode)
             t.start()
 
             # move
             # slider.set_val(new_value)
-            self.move_slider_smoothly(slider, new_value, time_to_move_seconds=3)
+            self.move_slider_smoothly(slider, new_value, time_to_move_seconds=time_to_move)
 
 
     @staticmethod
@@ -808,6 +815,7 @@ class BeamformingPlot:
             'less': Image.open(Path(self.images_path, 'usrminus.png')),
             'more': Image.open(Path(self.images_path, 'usrplus.png')),
         }
+        self.auto_mode_image = Image.open(Path(self.images_path, 'random.png'))
 
         self.language_images = {
             'de': Image.open(Path(self.images_path, 'flag_DE.png')),

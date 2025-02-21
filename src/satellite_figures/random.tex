@@ -1,0 +1,42 @@
+
+\begin{tikzpicture}
+	
+	\input{illustrations/satellite.sty}
+	\input{illustrations/person.sty}
+	
+	\tikzstyle{antenna} = [
+	draw,
+	circle,
+	inner sep=2pt,
+	fill=black,
+	]
+	
+	\tikzstyle{a} = [%
+	thick,
+	]
+	
+	\tikzstyle{a0} = [%
+	a,
+	uniblue1,
+	]
+	\tikzstyle{a1} = [%
+	a,
+	unired2,
+	]
+	\tikzstyle{a2} = [%
+	a,
+	black,
+	]
+	
+	\newcommand{\dist}{.4}
+
+	\node [draw, line width=7, rounded corners, minimum width=3cm, minimum height=3cm] {};
+	\node (center dot)[circle, fill=black] {};
+	\node [circle, fill=black, above left= \dist and \dist of center dot] {};
+	\node [circle, fill=black, above right= \dist and \dist of center dot] {};
+	\node [circle, fill=black, below left= \dist and \dist of center dot] {};
+	\node [circle, fill=black, below right= \dist and \dist of center dot] {};
+	
+	
+	
+\end{tikzpicture}
