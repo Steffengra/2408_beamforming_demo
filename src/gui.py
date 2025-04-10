@@ -54,6 +54,7 @@ class BeamformingPlot:
         self.language = 'en'
         self.tutorial = False
         self.auto_mode = False
+        self.display_level = 'full'
 
         self.own_spherical_coordinates = np.array([10, np.pi / 2, np.pi / 2])
         self.users_spherical_coordinates = [
@@ -227,7 +228,7 @@ class BeamformingPlot:
             visible=False,
         )
 
-        self.lines_power_gain = []
+        # self.lines_power_gain = []
         self.lines_signal_to_interference = []
         self.line_fills = {}
 
@@ -238,7 +239,7 @@ class BeamformingPlot:
         self.text_user_antennas = []
 
         # button axes
-        self.ax_button_tutorial = self.fig.add_axes((0, 0, .5*self.button_width, .5*self.button_height))
+        # self.ax_button_tutorial = self.fig.add_axes((0, 0, .5*self.button_width, .5*self.button_height))
 
         self.ax_button_2ant = self.fig.add_axes(
             (1 - 3 * self.button_width - self.button_pad_horizontal,
@@ -283,7 +284,7 @@ class BeamformingPlot:
         )
 
         # buttons
-        self.button_tutorial = Button(self.ax_button_tutorial, 'i', **self.button_args)
+        # self.button_tutorial = Button(self.ax_button_tutorial, 'i', **self.button_args)
         self.button_2_ant = Button(self.ax_button_2ant, '', **self.button_args)
         self.button_3_ant = Button(self.ax_button_3ant, '', **self.button_args)
         self.button_4_ant = Button(self.ax_button_4ant, '', **self.button_args)
@@ -293,14 +294,14 @@ class BeamformingPlot:
         self.button_display_mode = Button(self.ax_button_display_mode, '?', **self.button_args)
         self.button_auto_mode = Button(self.ax_button_auto_mode, '', **self.button_args)
 
-        self.button_tutorial.on_clicked(self.toggle_tutorial)
+        # self.button_tutorial.on_clicked(self.toggle_tutorial)
         self.button_2_ant.on_clicked(self.build_2_ant)
         self.button_3_ant.on_clicked(self.build_3_ant)
         self.button_4_ant.on_clicked(self.build_4_ant)
         self.button_ai_solution.on_clicked(self.solve)
         self.button_language_toggle.on_clicked(self.toggle_language)
         self.button_user_toggle.on_clicked(self.toggle_user_number)
-        self.button_display_mode.on_clicked(self.toggle_display_mode)
+        self.button_display_mode.on_clicked(self.toggle_tutorial)
         self.button_auto_mode.on_clicked(self.toggle_auto_mode)
 
         # imshow changes the axis box and there's no easy way to stop it so we just resize it back to before
@@ -390,51 +391,6 @@ class BeamformingPlot:
 
         self.clear_plot()
 
-        # set scenario figure
-        self.scenario_figure = self.scenario_figure_axis.images[0].set_data(self.scenario_images[f'{self.user_num}-{self.antenna_num}'])
-
-        # set backgrounds
-        # self.background_axis_0 = self.axis_beam.imshow(background_img_1, extent=[self.aod_range[0], self.aod_range[-1], 0, 2.2], aspect='auto', zorder=-1)
-        if self.user_num == 2:
-            img = self.background_img_frontal_2usr
-        elif self.user_num == 3:
-            img = self.background_img_frontal_3usr
-        self.background_axis_1 = self.axis_sinr.imshow(img, extent=[self.aod_range[0], self.aod_range[-1], 0, 2.5], aspect='auto', zorder=-1)
-
-        # set main axes lines
-        w_precoder = np.exp(1j * np.zeros((self.antenna_num, self.user_num)))
-
-        power_gains_users, signal_to_interference_ratio_per_user = self.calculate_data(w_precoder)
-        self.lines_power_gain = []
-        self.lines_signal_to_interference = []
-        for user_id in range(self.user_num):
-            self.lines_power_gain.append(
-                self.axis_beam.plot(self.aod_range, power_gains_users[user_id, :], color=self.colors[user_id])[0])
-            self.lines_signal_to_interference.append(
-                self.axis_sinr.plot(self.aod_range, signal_to_interference_ratio_per_user[user_id, :],
-                                  color=self.colors[user_id])[0])
-
-        # set result text
-        sum_sinr = sum(np.maximum(0, np.diagonal(signal_to_interference_ratio_per_user[:, self.user_aod_range_idx])))
-        self.result_text.set_text(f'{sum_sinr:.2f}')
-
-        # mark user positions
-        for user_id, user_aod in enumerate(self.user_aods):
-            self.axis_beam.scatter(user_aod, 2.2, color=self.colors[user_id], s=60).set_clip_on(False)
-            self.axis_sinr.scatter(user_aod, 0, color=self.colors[user_id], s=60).set_clip_on(False)
-            self.text_user_pos.append(
-                self.axis_beam.text(user_aod, -0.15, s='', color=self.colors[user_id],
-                                  verticalalignment='top', horizontalalignment='center'))
-
-            self.axis_beam.vlines(user_aod, 0, 20, ls=':', color=self.colors[user_id])
-            self.axis_sinr.vlines(user_aod, 0, 15, ls=':', color=self.colors[user_id])
-
-        # create lines for wave overlap inset plot
-        angles = self.calculate_gain_at_userpos(user_id=0, w_precoder=np.ones(self.antenna_num)[np.newaxis])
-        for angle in angles:
-            self.lines_overlapplot.append(
-                self.ax_overlapplot.plot(np.linspace(0, 2 * np.pi, 100), np.sin(np.linspace(0, 2 * np.pi, 100) - angle),
-                                         color=self.colors[0])[0])
 
         # place user texts for antenna sliders
         for user_id in range(self.user_num):
@@ -487,6 +443,54 @@ class BeamformingPlot:
             ]
             for user_id in range(self.user_num)
         ]
+
+        # set scenario figure
+        self.scenario_figure = self.scenario_figure_axis.images[0].set_data(self.scenario_images[f'{self.user_num}-{self.antenna_num}'])
+
+        # set backgrounds
+        # self.background_axis_0 = self.axis_beam.imshow(background_img_1, extent=[self.aod_range[0], self.aod_range[-1], 0, 2.2], aspect='auto', zorder=-1)
+        if self.user_num == 2:
+            img = self.background_img_frontal_2usr
+        elif self.user_num == 3:
+            img = self.background_img_frontal_3usr
+        self.background_axis_1 = self.axis_sinr.imshow(img, extent=[self.aod_range[0], self.aod_range[-1], 0, 2.5], aspect='auto', zorder=-1)
+
+        w_precoder = np.exp(1j * np.zeros((self.antenna_num, self.user_num)))
+        power_gains_users, signal_to_interference_ratio_per_user = self.calculate_data(w_precoder)
+
+        # set main axes lines
+
+        # self.lines_power_gain = []
+        self.lines_signal_to_interference = []
+        for user_id in range(self.user_num):
+            # self.lines_power_gain.append(
+            #     self.axis_beam.plot(self.aod_range, power_gains_users[user_id, :], color=self.colors[user_id])[0])
+            self.lines_signal_to_interference.append(
+                self.axis_sinr.plot(self.aod_range, signal_to_interference_ratio_per_user[user_id, :],
+                                  color=self.colors[user_id])[0])
+
+        # set result text
+        sum_sinr = sum(np.maximum(0, np.diagonal(signal_to_interference_ratio_per_user[:, self.user_aod_range_idx])))
+        self.result_text.set_text(f'{sum_sinr:.2f}')
+
+        # mark user positions
+        for user_id, user_aod in enumerate(self.user_aods):
+            self.axis_beam.scatter(user_aod, 2.2, color=self.colors[user_id], s=60).set_clip_on(False)
+            self.axis_sinr.scatter(user_aod, 0, color=self.colors[user_id], s=60).set_clip_on(False)
+            self.text_user_pos.append(
+                self.axis_beam.text(user_aod, -0.15, s='', color=self.colors[user_id],
+                                  verticalalignment='top', horizontalalignment='center'))
+
+            self.axis_beam.vlines(user_aod, 0, 20, ls=':', color=self.colors[user_id])
+            self.axis_sinr.vlines(user_aod, 0, 15, ls=':', color=self.colors[user_id])
+
+        # create lines for wave overlap inset plot
+        angles = self.calculate_gain_at_userpos(user_id=0, w_precoder=np.ones(self.antenna_num)[np.newaxis])
+        for angle in angles:
+            self.lines_overlapplot.append(
+                self.ax_overlapplot.plot(np.linspace(0, 2 * np.pi, 100), np.sin(np.linspace(0, 2 * np.pi, 100) - angle),
+                                         color=self.colors[0])[0])
+
 
         update_plot_functions = [self.update_plots_user0, self.update_plots_user1, self.update_plots_user2]
         for user_id, sliders_user in enumerate(self.sliders):
@@ -587,7 +591,6 @@ class BeamformingPlot:
         ]
         w_precoder = np.exp(slider_vals).reshape((self.antenna_num, self.user_num), order='F')
 
-
         power_gains_users, signal_to_interference_ratio_per_user = self.calculate_data(w_precoder)
 
         if user == 'all':
@@ -595,29 +598,58 @@ class BeamformingPlot:
             for line_fill in self.line_fills.values():
                 line_fill.remove()
                 del line_fill
+            self.line_fills = {}
 
-            self.line_fills = {
-                line_id:
-                self.axis_beam.fill_between(
-                    self.aod_range, power_gains_users[line_id, :],
-                    color=self.colors[line_id],
-                    alpha=0.3,
-                )
-                for line_id in range(len(self.lines_power_gain))
-            }
 
-            for line_id, line in enumerate(self.lines_power_gain):
-                line.set_ydata(power_gains_users[line_id, :])
+            if self.display_level == 'full':
+                self.line_fills = {
+                    line_id:
+                    self.axis_beam.fill_between(
+                        self.aod_range, power_gains_users[line_id, :],
+                        color=self.colors[line_id],
+                        alpha=0.3,
+                    )
+                    for line_id in range(self.user_num)
+                }
+
+            elif self.display_level == 'minimal':
+                self.line_fills = {
+                    line_id:
+                    self.axis_beam.fill_between(
+                        self.aod_range, power_gains_users[line_id, :],
+                        color=self.colors[line_id],
+                        alpha=0.3,
+                    )
+                    for line_id in [0]
+                }
+
+            # for line_id, line in enumerate(self.lines_power_gain):
+            #     line.set_ydata(power_gains_users[line_id, :])
+
         else:
 
-            self.line_fills[user].remove()
-            self.line_fills[user] = self.axis_beam.fill_between(
-                self.aod_range, power_gains_users[user, :],
-                color=self.colors[user],
-                alpha=0.3,
-            )
+            if user in self.line_fills.keys():
+                self.line_fills[user].remove()
 
-            self.lines_power_gain[user].set_ydata(power_gains_users[user, :])
+            if self.display_level == 'full':
+                self.line_fills[user] = self.axis_beam.fill_between(
+                    self.aod_range, power_gains_users[user, :],
+                    color=self.colors[user],
+                    alpha=0.3,
+                )
+
+            elif self.display_level == 'minimal' and user == 0:
+                self.line_fills = {
+                    line_id:
+                        self.axis_beam.fill_between(
+                            self.aod_range, power_gains_users[line_id, :],
+                            color=self.colors[line_id],
+                            alpha=0.3,
+                        )
+                    for line_id in [0]
+                }
+
+            # self.lines_power_gain[user].set_ydata(power_gains_users[user, :])
 
         for line_id, line in enumerate(self.lines_signal_to_interference):
             line.set_ydata(signal_to_interference_ratio_per_user[line_id, :])
@@ -773,11 +805,30 @@ class BeamformingPlot:
             event,
     ) -> None:
 
-        if self.axis_sinr.get_visible() is False:
+        if self.display_level == 'minimal':
+
             self.axis_sinr.set_visible(True)
-        else:
+
+            self.display_level = 'full'
+            self.update_plots(None, user='all')
+
+        elif self.display_level == 'full':
+
             self.axis_sinr.set_visible(False)
-        self.fig.canvas.draw_idle()
+            # for line in self.lines_power_gain:
+            #     line.set_visible(False)
+
+            self.display_level = 'minimal'
+            self.update_plots(None, user='all')
+
+        else:
+            raise ValueError(f'unknown display mode {self.display_level}')
+
+        # if self.axis_sinr.get_visible() is False:
+        #     self.axis_sinr.set_visible(True)
+        # else:
+        #     self.axis_sinr.set_visible(False)
+        # self.fig.canvas.draw_idle()
 
     def toggle_auto_mode(
             self,
